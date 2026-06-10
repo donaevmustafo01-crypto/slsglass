@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="tg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SLS-Glass V0</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#06060f;color:#c8d8ff;font-family:system-ui,sans-serif;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+#scene{position:relative;flex:1;overflow:hidden;background:#000}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2}
+#hud{position:absolute;inset:0;z-index:3;pointer-events:none}
+.win{position:absolute;background:rgba(8,12,40,0.78);border:1px solid rgba(100,150,255,0.4);border-radius:16px;padding:10px 16px;min-width:95px;text-align:center}
+.wl{font-size:11px;color:rgba(120,170,255,0.8);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.wv{font-size:22px;font-weight:600;color:#e8f0ff;line-height:1}
+#wc{top:16px;left:16px}
+#wg{top:16px;left:50%;transform:translateX(-50%)}
+#wn{top:16px;right:16px}
+#wm{bottom:76px;left:16px}
+#wf{bottom:76px;right:16px}
+#badge{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(60,30,180,.88);border:1px solid rgba(140,110,255,.6);border-radius:30px;padding:8px 24px;font-size:15px;font-weight:600;color:#ddd8ff;white-space:nowrap;opacity:0;transition:opacity .25s;z-index:4}
+#badge.show{opacity:1}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:6;background:rgba(6,6,15,.88);text-align:center;padding:24px}
+.logo{font-size:30px;font-weight:700;color:#aac4ff}
+.sub{font-size:14px;color:#8898bb;line-height:1.6;max-width:280px}
+.bbtn{background:rgba(60,80,200,.9);border:1px solid rgba(100,140,255,.5);border-radius:14px;padding:14px 32px;font-size:16px;font-weight:600;color:#dde8ff;cursor:pointer;width:220px}
+.err{font-size:13px;color:#e07070;max-width:280px;line-height:1.5}
+#bar{display:flex;gap:8px;padding:10px 12px 14px;background:rgba(6,6,18,.95);border-top:1px solid rgba(80,100,200,.2)}
+#bar button{flex:1;padding:11px 0;border-radius:12px;border:1px solid rgba(100,140,255,.3);background:rgba(20,25,60,.8);color:#9ab0ee;font-size:14px;font-weight:500;cursor:pointer}
+#bar button:active{background:rgba(40,55,120,.9)}
+</style>
+</head>
+<body>
+<div id="scene">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div class="win" id="wc"><div class="wl">Соат</div><div class="wv" id="vc">--:--</div></div>
+    <div class="win" id="wg"><div class="wl">Ишора</div><div class="wv" id="vg">—</div></div>
+    <div class="win" id="wn"><div class="wl">Pinch</div><div class="wv" id="vn">0</div></div>
+    <div class="win" id="wm"><div class="wl">Ҳолат</div><div class="wv" id="vm">—</div></div>
+    <div class="win" id="wf"><div class="wl">FPS</div><div class="wv" id="vf">—</div></div>
+  </div>
+  <div id="badge"></div>
+  <div id="ov">
+    <div class="logo">SLS-Glass V0</div>
+    <p class="sub">Камераро кушоед — дасти шумо экранҳоро идора мекунад</p>
+    <button class="bbtn" onclick="startCam()">Камера кушо</button>
+    <p class="sub" style="font-size:12px;color:#556">HTTPS талаб карда мешавад</p>
+  </div>
+</div>
+<div id="bar">
+  <button onclick="startCam()" style="color:#7de0a0;border-color:rgba(100,200,130,.4)">▶ Оғоз</button>
+  <button onclick="stopCam()">⏹ Банд</button>
+  <button onclick="toggleMirror()">⇄ Оина</button>
+</div>
+
+<script>
+const vid=document.getElementById('vid'),cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const ov=document.getElementById('ov'),badge=document.getElementById('badge');
+let stream,hands,mpCam,pinchCount=0,lastG='',bTO,mirror=true,lastT=performance.now();
+
+function resize(){cv.width=cv.offsetWidth;cv.height=cv.offsetHeight}
+window.addEventListener('resize',resize);setTimeout(resize,100);
+
+setInterval(()=>{const n=new Date();document.getElementById('vc').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')},1000);
+
+function showBadge(t){badge.textContent=t;badge.classList.add('show');clearTimeout(bTO);bTO=setTimeout(()=>badge.classList.remove('show'),1800)}
+
+function setG(g){
+  const L={pinch:'✦ Pinch',open:'▣ Кушода',fist:'● Мушт',point:'▲ Ишора',none:'—'};
+  const M={pinch:'Click',open:'Scroll',fist:'Move',point:'Select',none:'—'};
+  document.getElementById('vg').textContent=L[g]||g;
+  document.getElementById('vm').textContent=M[g]||'';
+  if(g!==lastG){lastG=g;
+    if(g==='pinch'){pinchCount++;document.getElementById('vn').textContent=pinchCount;showBadge('Pinch — Click!')}
+    else if(g==='open')showBadge('Кафи кушода — Scroll')
+    else if(g==='fist')showBadge('Мушт — Move')
+    else if(g==='point')showBadge('Ишора — Select')
+  }
+}
+
+function classify(lm){
+  const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  if(d(lm[4],lm[8])<0.07)return'pinch';
+  const up=[lm[8].y<lm[6].y,lm[12].y<lm[10].y,lm[16].y<lm[14].y,lm[20].y<lm[18].y];
+  const n=up.filter(Boolean).length;
+  if(n===4)return'open';if(n===0)return'fist';
+  if(up[0]&&!up[1]&&!up[2]&&!up[3])return'point';
+  return'none';
+}
+
+function drawHand(lm){
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  const px=p=>[(mirror?1-p.x:p.x)*W,p.y*H];
+  const C=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+  ctx.strokeStyle='rgba(100,170,255,.65)';ctx.lineWidth=2.5;
+  for(const[a,b]of C){const[x1,y1]=px(lm[a]),[x2,y2]=px(lm[b]);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+  for(let i=0;i<21;i++){const[x,y]=px(lm[i]),tip=[4,8,12,16,20].includes(i);ctx.beginPath();ctx.arc(x,y,tip?8:5,0,Math.PI*2);ctx.fillStyle=(i===4||i===8)?'rgba(255,210,80,.95)':tip?'rgba(160,220,255,.9)':'rgba(100,180,255,.8)';ctx.fill()}
+  const[t4x,t4y]=px(lm[4]),[t8x,t8y]=px(lm[8]),mx=(t4x+t8x)/2,my=(t4y+t8y)/2,r=Math.hypot(t4x-mx,t4y-my);
+  ctx.beginPath();ctx.arc(mx,my,Math.max(r,10),0,Math.PI*2);ctx.strokeStyle=r<W*.035?'rgba(255,170,50,.95)':'rgba(80,220,130,.5)';ctx.lineWidth=r<W*.035?3:1.5;ctx.stroke();
+}
+
+function onResults(res){
+  const now=performance.now();document.getElementById('vf').textContent=Math.round(1000/(now-lastT));lastT=now;
+  if(!res.multiHandLandmarks?.length){ctx.clearRect(0,0,cv.width,cv.height);setG('none');return}
+  drawHand(res.multiHandLandmarks[0]);setG(classify(res.multiHandLandmarks[0]));
+}
+
+function initMP(){
+  hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.7,minTrackingConfidence:.6});
+  hands.onResults(onResults);
+  if(window.Camera){mpCam=new Camera(vid,{onFrame:async()=>{await hands.send({image:vid})},width:640,height:480});mpCam.start()}
+}
+
+function loadMP(){
+  if(window.Hands){initMP();return}
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+  s1.onload=()=>{const s2=document.createElement('script');s2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';s2.onload=initMP;document.head.appendChild(s2)};
+  document.head.appendChild(s1);
+}
+
+async function startCam(){
+  const errEl=ov.querySelector('.err');if(errEl)errEl.remove();
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false});
+    vid.srcObject=stream;await vid.play();
+    resize();ov.style.display='none';loadMP();
+  }catch(e){
+    const p=document.createElement('p');p.className='err';
+    p.textContent='Хато: '+e.message+'. Лутфан HTTPS истифода баред.';
+    ov.appendChild(p);
+  }
+}
+
+function stopCam(){
+  if(mpCam){try{mpCam.stop()}catch(e){}mpCam=null}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  ctx.clearRect(0,0,cv.width,cv.height);ov.style.display='flex';setG('none');
+}
+
+function toggleMirror(){mirror=!mirror;vid.style.transform=mirror?'scaleX(-1)':'scaleX(1)'}
+</script>
+</body>
+  </html>
