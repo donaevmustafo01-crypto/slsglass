@@ -1,1 +1,467 @@
- 
+ <!DOCTYPE html>
+<html lang="tg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SLS-Glass V0</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;height:100dvh;overflow:hidden;display:flex;flex-direction:column;font-family:system-ui,sans-serif;color:#eef4ff}
+#scene{position:relative;flex:1;overflow:hidden}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#handcv{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+#hud{position:absolute;inset:0;z-index:3;pointer-events:none}
+
+/* Базаи экранчаҳо */
+.panel{
+  position:absolute;
+  background:rgba(5,8,38,0.82);
+  border:1.5px solid rgba(100,155,255,0.45);
+  border-radius:20px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  box-shadow:0 0 28px rgba(70,120,255,0.22),inset 0 0 16px rgba(70,120,255,0.06);
+  opacity:0;transform:scale(0.85) translateY(10px);
+  transition:opacity 0.28s,transform 0.28s;
+  pointer-events:none;
+}
+.panel.show{opacity:1;transform:scale(1) translateY(0)}
+
+/* Соат — ҳамеша намоён */
+#p-clock{top:18px;left:16px;padding:10px 18px;min-width:95px;text-align:center;opacity:1;transform:none}
+.clk-lbl{font-size:10px;color:rgba(130,175,255,0.75);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.clk-val{font-size:26px;font-weight:700;color:#eef4ff}
+
+/* Клавиатура */
+#p-keyboard{bottom:74px;left:50%;transform:translateX(-50%) scale(0.85);width:310px;padding:14px 10px 10px}
+#p-keyboard.show{transform:translateX(-50%) scale(1)}
+.kb-screen{background:rgba(0,0,20,0.7);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:18px;color:#c8e0ff;min-height:36px;text-align:right;letter-spacing:1px;border:1px solid rgba(80,120,255,0.3)}
+.kb-rows{display:flex;flex-direction:column;gap:6px}
+.kb-row{display:flex;gap:6px;justify-content:center}
+.kb-row button{
+  flex:1;padding:10px 0;border-radius:10px;
+  border:1px solid rgba(80,130,255,0.3);
+  background:rgba(15,22,65,0.85);
+  color:#c8d8ff;font-size:15px;font-weight:600;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:background 0.12s;
+}
+.kb-row button:active{background:rgba(50,80,200,0.9)}
+.kb-row button.wide{flex:2}
+.kb-row button.del{color:#ff9090}
+
+/* Калькулятор */
+#p-calc{bottom:74px;left:50%;transform:translateX(-50%) scale(0.85);width:280px;padding:14px 10px 10px}
+#p-calc.show{transform:translateX(-50%) scale(1)}
+.calc-screen{background:rgba(0,0,20,0.7);border-radius:10px;padding:8px 14px;margin-bottom:10px;text-align:right;border:1px solid rgba(80,120,255,0.3)}
+.calc-expr{font-size:12px;color:rgba(150,180,255,0.6);min-height:16px}
+.calc-val{font-size:28px;font-weight:700;color:#c8e0ff}
+.calc-rows{display:flex;flex-direction:column;gap:6px}
+.calc-row{display:flex;gap:6px}
+.calc-row button{
+  flex:1;padding:13px 0;border-radius:10px;
+  border:1px solid rgba(80,130,255,0.25);
+  background:rgba(15,22,65,0.85);
+  color:#c8d8ff;font-size:16px;font-weight:600;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.calc-row button:active{background:rgba(50,80,200,0.9)}
+.calc-row button.op{color:#ffc87a;border-color:rgba(255,160,50,0.3);background:rgba(40,25,10,0.8)}
+.calc-row button.eq{background:rgba(50,100,220,0.85);color:#fff;border-color:rgba(100,150,255,0.5)}
+.calc-row button.zero{flex:2}
+
+/* Менюи асосӣ */
+#p-menu{top:50%;left:50%;transform:translate(-50%,-50%) scale(0.85);width:280px;padding:18px}
+#p-menu.show{transform:translate(-50%,-50%) scale(1)}
+.menu-title{text-align:center;font-size:14px;color:rgba(140,180,255,0.7);margin-bottom:14px;letter-spacing:.05em}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.menu-item{
+  background:rgba(15,22,65,0.85);border:1px solid rgba(80,130,255,0.28);
+  border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.menu-item:active{background:rgba(40,65,180,0.9)}
+.menu-icon{font-size:26px;margin-bottom:4px}
+.menu-lbl{font-size:12px;color:rgba(160,200,255,0.8)}
+
+/* Мусиқӣ */
+#p-music{bottom:74px;left:50%;transform:translateX(-50%) scale(0.85);width:280px;padding:16px}
+#p-music.show{transform:translateX(-50%) scale(1)}
+.mus-title{text-align:center;font-size:13px;color:rgba(140,180,255,0.7);margin-bottom:4px}
+.mus-song{text-align:center;font-size:17px;font-weight:700;color:#c8e0ff;margin-bottom:2px}
+.mus-artist{text-align:center;font-size:12px;color:rgba(160,200,255,0.6);margin-bottom:14px}
+.mus-bar{height:4px;background:rgba(80,120,255,0.25);border-radius:4px;margin-bottom:14px;overflow:hidden}
+.mus-prog{height:100%;background:linear-gradient(90deg,#5090ff,#a060ff);border-radius:4px;width:35%;animation:prog 8s linear infinite}
+@keyframes prog{0%{width:0%}100%{width:100%}}
+.mus-btns{display:flex;justify-content:center;gap:16px}
+.mus-btns button{background:rgba(15,22,65,0.85);border:1px solid rgba(80,130,255,0.3);border-radius:50%;width:46px;height:46px;font-size:18px;cursor:pointer;color:#c8d8ff;-webkit-tap-highlight-color:transparent}
+.mus-btns button:active{background:rgba(50,80,200,0.9)}
+
+/* Браузер */
+#p-browser{top:18px;left:50%;transform:translateX(-50%) scale(0.85);width:320px;padding:12px}
+#p-browser.show{transform:translateX(-50%) scale(1)}
+.br-bar{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+.br-input{flex:1;background:rgba(0,0,20,0.7);border:1px solid rgba(80,120,255,0.3);border-radius:10px;padding:8px 12px;color:#c8e0ff;font-size:13px}
+.br-go{background:rgba(50,80,200,0.85);border:none;border-radius:10px;padding:8px 12px;color:#fff;font-size:13px;cursor:pointer}
+.br-links{display:flex;flex-direction:column;gap:6px}
+.br-link{background:rgba(15,22,65,0.85);border:1px solid rgba(80,130,255,0.22);border-radius:10px;padding:10px 12px;cursor:pointer}
+.br-link-title{font-size:13px;color:#c8e0ff;font-weight:600}
+.br-link-url{font-size:11px;color:rgba(120,160,255,0.6)}
+
+/* Камера режим */
+#p-cammode{top:18px;right:16px;padding:12px 14px;min-width:110px}
+.cam-lbl{font-size:10px;color:rgba(130,175,255,0.75);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;text-align:center}
+.cam-modes{display:flex;flex-direction:column;gap:6px}
+.cam-btn{background:rgba(15,22,65,0.85);border:1px solid rgba(80,130,255,0.28);border-radius:10px;padding:8px 10px;font-size:12px;color:#c8d8ff;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
+.cam-btn.active{background:rgba(50,100,220,0.85);border-color:rgba(100,160,255,0.6);color:#fff}
+.cam-btn:active{background:rgba(40,70,180,0.9)}
+
+/* Бейдж */
+#badge{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(45,18,165,0.92);border:1.5px solid rgba(125,95,255,0.6);
+  border-radius:32px;padding:10px 28px;
+  font-size:16px;font-weight:700;color:#ddd8ff;
+  white-space:nowrap;opacity:0;transition:opacity 0.2s;z-index:6;
+  pointer-events:none;
+}
+#badge.on{opacity:1}
+
+/* Старт */
+#ss{position:absolute;inset:0;z-index:10;background:rgba(0,0,10,0.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:28px}
+.ss-logo{font-size:36px;font-weight:800;color:#a8c4ff}
+.ss-desc{font-size:14px;color:#6878a0;line-height:1.7;max-width:300px}
+.ss-btn{background:linear-gradient(135deg,rgba(45,75,215,.95),rgba(75,45,205,.95));border:1.5px solid rgba(105,150,255,.5);border-radius:16px;padding:15px 36px;font-size:17px;font-weight:700;color:#dde8ff;cursor:pointer;width:240px;box-shadow:0 4px 22px rgba(55,80,210,.4)}
+.ss-hint{font-size:12px;color:rgba(130,160,255,0.5);max-width:280px;line-height:1.6}
+.ss-err{font-size:13px;color:#f08080;max-width:280px;line-height:1.5}
+
+/* Тугмаҳои поён */
+#bar{display:flex;gap:8px;padding:8px 10px 12px;background:rgba(3,3,14,.97);border-top:1px solid rgba(55,90,210,.22);z-index:6}
+#bar button{flex:1;padding:12px 0;border-radius:13px;border:1px solid rgba(85,130,255,.28);background:rgba(12,18,52,.85);color:#8aaaea;font-size:13px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#bar button:active{background:rgba(35,55,130,.9)}
+#btn-go{border-color:rgba(75,205,120,.4);color:#6ddb9a}
+</style>
+</head>
+<body>
+
+<div id="scene">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="handcv"></canvas>
+
+  <div id="hud">
+    <!-- Соат — ҳамеша -->
+    <div class="panel" id="p-clock">
+      <div class="clk-lbl">Соат</div>
+      <div class="clk-val" id="v-clock">--:--</div>
+    </div>
+
+    <!-- Клавиатура -->
+    <div class="panel" id="p-keyboard">
+      <div class="kb-screen" id="kb-text">_</div>
+      <div class="kb-rows">
+        <div class="kb-row">
+          <button onclick="kbType('а')">а</button><button onclick="kbType('б')">б</button><button onclick="kbType('в')">в</button><button onclick="kbType('г')">г</button><button onclick="kbType('д')">д</button><button onclick="kbType('е')">е</button>
+        </div>
+        <div class="kb-row">
+          <button onclick="kbType('ж')">ж</button><button onclick="kbType('з')">з</button><button onclick="kbType('и')">и</button><button onclick="kbType('й')">й</button><button onclick="kbType('к')">к</button><button onclick="kbType('л')">л</button>
+        </div>
+        <div class="kb-row">
+          <button onclick="kbType('м')">м</button><button onclick="kbType('н')">н</button><button onclick="kbType('о')">о</button><button onclick="kbType('п')">п</button><button onclick="kbType('р')">р</button><button onclick="kbType('с')">с</button>
+        </div>
+        <div class="kb-row">
+          <button onclick="kbType('т')">т</button><button onclick="kbType('у')">у</button><button onclick="kbType('х')">х</button><button onclick="kbType('ч')">ч</button><button onclick="kbType('ш')">ш</button><button onclick="kbType('ъ')">ъ</button>
+        </div>
+        <div class="kb-row">
+          <button class="wide" onclick="kbType(' ')">Фазо</button>
+          <button class="wide del" onclick="kbDel()">⌫ Нест</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Калькулятор -->
+    <div class="panel" id="p-calc">
+      <div class="calc-screen">
+        <div class="calc-expr" id="calc-expr"></div>
+        <div class="calc-val" id="calc-val">0</div>
+      </div>
+      <div class="calc-rows">
+        <div class="calc-row">
+          <button onclick="cCalc('C')" class="op">C</button>
+          <button onclick="cCalc('±')" class="op">±</button>
+          <button onclick="cCalc('%')" class="op">%</button>
+          <button onclick="cCalc('÷')" class="op">÷</button>
+        </div>
+        <div class="calc-row">
+          <button onclick="cCalc('7')">7</button><button onclick="cCalc('8')">8</button><button onclick="cCalc('9')">9</button>
+          <button onclick="cCalc('×')" class="op">×</button>
+        </div>
+        <div class="calc-row">
+          <button onclick="cCalc('4')">4</button><button onclick="cCalc('5')">5</button><button onclick="cCalc('6')">6</button>
+          <button onclick="cCalc('−')" class="op">−</button>
+        </div>
+        <div class="calc-row">
+          <button onclick="cCalc('1')">1</button><button onclick="cCalc('2')">2</button><button onclick="cCalc('3')">3</button>
+          <button onclick="cCalc('+')" class="op">+</button>
+        </div>
+        <div class="calc-row">
+          <button onclick="cCalc('0')" class="zero">0</button>
+          <button onclick="cCalc('.')">.</button>
+          <button onclick="cCalc('=')" class="eq">=</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Менюи асосӣ -->
+    <div class="panel" id="p-menu">
+      <div class="menu-title">⬡ SLS-Glass — Меню</div>
+      <div class="menu-grid">
+        <div class="menu-item" onclick="openPanel('keyboard')"><div class="menu-icon">⌨️</div><div class="menu-lbl">Клавиатура</div></div>
+        <div class="menu-item" onclick="openPanel('calc')"><div class="menu-icon">🧮</div><div class="menu-lbl">Калькулятор</div></div>
+        <div class="menu-item" onclick="openPanel('music')"><div class="menu-icon">🎵</div><div class="menu-lbl">Мусиқӣ</div></div>
+        <div class="menu-item" onclick="openPanel('browser')"><div class="menu-icon">🌐</div><div class="menu-lbl">Браузер</div></div>
+        <div class="menu-item" onclick="openPanel('cammode')"><div class="menu-icon">📷</div><div class="menu-lbl">Камера</div></div>
+        <div class="menu-item" onclick="closeAll()"><div class="menu-icon">✕</div><div class="menu-lbl">Бастан</div></div>
+      </div>
+    </div>
+
+    <!-- Мусиқӣ -->
+    <div class="panel" id="p-music">
+      <div class="mus-title">🎵 Мусиқӣ</div>
+      <div class="mus-song">Дили ман</div>
+      <div class="mus-artist">Рӯдакӣ FM</div>
+      <div class="mus-bar"><div class="mus-prog"></div></div>
+      <div class="mus-btns">
+        <button>⏮</button>
+        <button id="mus-play">⏸</button>
+        <button>⏭</button>
+      </div>
+    </div>
+
+    <!-- Браузер -->
+    <div class="panel" id="p-browser">
+      <div class="br-bar">
+        <input class="br-input" id="br-url" value="sls-glass.io" readonly>
+        <button class="br-go">Go</button>
+      </div>
+      <div class="br-links">
+        <div class="br-link"><div class="br-link-title">🔍 Ҷустуҷӯ</div><div class="br-link-url">search.tajik.net</div></div>
+        <div class="br-link"><div class="br-link-title">📰 Хабарҳо</div><div class="br-link-url">news.tj</div></div>
+        <div class="br-link"><div class="br-link-title">🌍 Wikipedia</div><div class="br-link-url">tg.wikipedia.org</div></div>
+      </div>
+    </div>
+
+    <!-- Камера режимҳо -->
+    <div class="panel" id="p-cammode">
+      <div class="cam-lbl">📷 Камера</div>
+      <div class="cam-modes">
+        <div class="cam-btn active" onclick="setCamMode(this,'Оддӣ')">Оддӣ</div>
+        <div class="cam-btn" onclick="setCamMode(this,'Порт.')">Портрет</div>
+        <div class="cam-btn" onclick="setCamMode(this,'Видео')">Видео</div>
+        <div class="cam-btn" onclick="setCamMode(this,'Скан')">Скан</div>
+      </div>
+    </div>
+
+    <div id="badge"></div>
+  </div>
+
+  <!-- Старт -->
+  <div id="ss">
+    <div class="ss-logo">SLS-Glass V0</div>
+    <p class="ss-desc">Ишораҳо экранчаҳоро мекушоянд</p>
+    <div style="text-align:left;background:rgba(15,22,65,0.6);border-radius:14px;padding:14px 18px;font-size:13px;color:rgba(160,200,255,0.8);line-height:1.9;max-width:280px">
+      ✦ <b>Pinch</b> → Клавиатура<br>
+      ▣ <b>Кафи кушода</b> → Меню<br>
+      ● <b>Мушт</b> → Мусиқӣ<br>
+      ▲ <b>1 ангушт</b> → Калькулятор
+    </div>
+    <button class="ss-btn" onclick="startCam()">📷 Камера кушо</button>
+    <p class="ss-hint">Камераи пушти телефон кор мекунад</p>
+  </div>
+</div>
+
+<div id="bar">
+  <button id="btn-go" onclick="startCam()">▶ Оғоз</button>
+  <button onclick="stopCam()">⏹ Банд</button>
+  <button onclick="switchCam()">🔄 Рӯй/Пушт</button>
+</div>
+
+<script>
+const vid=document.getElementById('vid');
+const hcv=document.getElementById('handcv');
+const hx=hcv.getContext('2d');
+const ss=document.getElementById('ss');
+const badge=document.getElementById('badge');
+
+let stream=null,hands=null,mpCam=null;
+let facing='environment';
+let lastG='',bTO=null,lastFT=performance.now();
+let kbText='';
+let calcVal='0',calcExpr='',calcOp='',calcPrev='';
+
+// Андоза
+function resize(){hcv.width=hcv.offsetWidth;hcv.height=hcv.offsetHeight}
+window.addEventListener('resize',resize);setTimeout(resize,100);
+
+// Соат
+function tick(){const n=new Date();document.getElementById('v-clock').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')}
+tick();setInterval(tick,1000);
+
+// Бейдж
+function showBadge(t){badge.textContent=t;badge.classList.add('on');clearTimeout(bTO);bTO=setTimeout(()=>badge.classList.remove('on'),1800)}
+
+// Панелҳо
+const PANELS=['keyboard','calc','menu','music','browser','cammode'];
+let activePanel=null;
+
+function closeAll(){
+  PANELS.forEach(id=>{
+    const el=document.getElementById('p-'+id);
+    if(el)el.classList.remove('show');
+  });
+  activePanel=null;
+}
+
+function openPanel(id){
+  if(activePanel===id){closeAll();return}
+  closeAll();
+  const el=document.getElementById('p-'+id);
+  if(el){el.classList.add('show');activePanel=id}
+}
+
+// Клавиатура
+function kbType(c){
+  kbText+=c;
+  const el=document.getElementById('kb-text');
+  if(el)el.textContent=kbText||'_';
+}
+function kbDel(){
+  kbText=kbText.slice(0,-1);
+  const el=document.getElementById('kb-text');
+  if(el)el.textContent=kbText||'_';
+}
+
+// Калькулятор
+function cCalc(v){
+  const valEl=document.getElementById('calc-val');
+  const exEl=document.getElementById('calc-expr');
+  if(v==='C'){calcVal='0';calcExpr='';calcOp='';calcPrev=''}
+  else if(v==='±'){calcVal=String(-parseFloat(calcVal)||0)}
+  else if(v==='%'){calcVal=String(parseFloat(calcVal)/100)}
+  else if(['+','−','×','÷'].includes(v)){
+    calcPrev=calcVal;calcOp=v;calcExpr=calcVal+' '+v;calcVal='0';
+  }
+  else if(v==='='){
+    const a=parseFloat(calcPrev),b=parseFloat(calcVal);
+    let r=0;
+    if(calcOp==='+')r=a+b;else if(calcOp==='−')r=a-b;
+    else if(calcOp==='×')r=a*b;else if(calcOp==='÷')r=b!==0?a/b:0;
+    calcExpr=calcPrev+' '+calcOp+' '+calcVal+' =';
+    calcVal=String(parseFloat(r.toFixed(8)));calcOp='';calcPrev='';
+  }
+  else if(v==='.'){if(!calcVal.includes('.'))calcVal+='.'}
+  else{calcVal=calcVal==='0'?v:calcVal+v}
+  if(valEl)valEl.textContent=calcVal;
+  if(exEl)exEl.textContent=calcExpr;
+}
+
+// Камера режим
+function setCamMode(btn,name){
+  document.querySelectorAll('.cam-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  showBadge('📷 '+name+' режим');
+}
+
+// Тасниф ишора
+function classify(lm){
+  const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  if(d(lm[4],lm[8])<0.07)return'pinch';
+  const up=[lm[8].y<lm[6].y,lm[12].y<lm[10].y,lm[16].y<lm[14].y,lm[20].y<lm[18].y];
+  const n=up.filter(Boolean).length;
+  if(n===4)return'open';
+  if(n===0)return'fist';
+  if(up[0]&&!up[1]&&!up[2]&&!up[3])return'point';
+  return'none';
+}
+
+// Ишора → панел
+function applyG(g){
+  if(g!==lastG){
+    lastG=g;
+    if(g==='pinch')  {showBadge('✦ Pinch — Клавиатура');openPanel('keyboard')}
+    else if(g==='open') {showBadge('▣ Меню');openPanel('menu')}
+    else if(g==='fist') {showBadge('● Мушт — Мусиқӣ');openPanel('music')}
+    else if(g==='point'){showBadge('▲ Ишора — Калькулятор');openPanel('calc')}
+  }
+}
+
+// Кашидани скелети даст
+function drawHand(lm){
+  const W=hcv.width,H=hcv.height;
+  hx.clearRect(0,0,W,H);
+  const p=l=>[l.x*W,l.y*H];
+  const CONN=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+  hx.lineWidth=3;hx.strokeStyle='rgba(90,165,255,0.88)';hx.shadowColor='rgba(60,140,255,0.85)';hx.shadowBlur=10;
+  for(const[a,b]of CONN){const[x1,y1]=p(lm[a]),[x2,y2]=p(lm[b]);hx.beginPath();hx.moveTo(x1,y1);hx.lineTo(x2,y2);hx.stroke()}
+  hx.shadowBlur=0;
+  for(let i=0;i<21;i++){
+    const[x,y]=p(lm[i]);
+    const tip=[4,8,12,16,20].includes(i),key=i===4||i===8;
+    hx.beginPath();hx.arc(x,y,key?11:tip?8:5,0,Math.PI*2);
+    hx.fillStyle=key?'rgba(255,225,50,.98)':tip?'rgba(160,228,255,.95)':'rgba(100,175,255,.88)';
+    hx.shadowColor=key?'rgba(255,205,0,.95)':'rgba(80,170,255,.65)';
+    hx.shadowBlur=key?16:8;hx.fill();hx.shadowBlur=0;
+  }
+  const[t4x,t4y]=p(lm[4]),[t8x,t8y]=p(lm[8]);
+  const mx=(t4x+t8x)/2,my=(t4y+t8y)/2,r=Math.hypot(t4x-mx,t4y-my);
+  const pin=r<W*0.04;
+  hx.beginPath();hx.moveTo(t4x,t4y);hx.lineTo(t8x,t8y);
+  hx.strokeStyle=pin?'rgba(255,175,30,.95)':'rgba(80,235,145,.6)';
+  hx.lineWidth=pin?3.5:1.5;hx.shadowColor=pin?'rgba(255,145,0,.85)':'transparent';
+  hx.shadowBlur=pin?14:0;hx.stroke();hx.shadowBlur=0;
+}
+
+function onResults(res){
+  const now=performance.now();lastFT=now;
+  if(!res.multiHandLandmarks?.length){hx.clearRect(0,0,hcv.width,hcv.height);return}
+  drawHand(res.multiHandLandmarks[0]);
+  applyG(classify(res.multiHandLandmarks[0]));
+}
+
+function initMP(){
+  hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.75,minTrackingConfidence:.65});
+  hands.onResults(onResults);
+  if(window.Camera){mpCam=new Camera(vid,{onFrame:async()=>{await hands.send({image:vid})},width:640,height:480});mpCam.start()}
+}
+
+function loadMP(){
+  if(window.Hands){initMP();return}
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+  s1.onload=()=>{const s2=document.createElement('script');s2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';s2.onload=initMP;document.head.appendChild(s2)};
+  document.head.appendChild(s1);
+}
+
+async function startCam(){
+  const e=ss.querySelector('.ss-err');if(e)e.remove();
+  try{
+    if(stream)stream.getTracks().forEach(t=>t.stop());
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:false});
+    vid.srcObject=stream;await vid.play();resize();ss.style.display='none';loadMP();
+  }catch(err){
+    const p=document.createElement('p');p.className='ss-err';p.textContent='Хато: '+err.message;ss.appendChild(p);
+  }
+}
+
+function stopCam(){
+  if(mpCam){try{mpCam.stop()}catch(e){}mpCam=null}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  hx.clearRect(0,0,hcv.width,hcv.height);ss.style.display='flex';
+}
+
+async function switchCam(){
+  facing=facing==='environment'?'user':'environment';
+  if(stream)await startCam();
+}
+</script>
+</body>
+  </html>
