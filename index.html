@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="tg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SLS-Glass V0.3</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;height:100dvh;overflow:hidden;display:flex;flex-direction:column;font-family:system-ui,sans-serif;color:#fff}
+
+#scene{position:relative;flex:1;overflow:hidden}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#handcv{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+
+/* Курсор */
+#cursor{
+  position:absolute;z-index:5;pointer-events:none;
+  width:44px;height:44px;
+  border-radius:50%;
+  border:3px solid rgba(255,255,255,0.9);
+  background:rgba(255,255,255,0.15);
+  box-shadow:0 0 18px rgba(255,255,255,0.5);
+  transform:translate(-50%,-50%);
+  display:none;
+  transition:width 0.1s,height 0.1s,background 0.1s;
+}
+#cursor.pinch{
+  width:28px;height:28px;
+  background:rgba(255,200,50,0.7);
+  border-color:rgba(255,200,50,1);
+  box-shadow:0 0 24px rgba(255,180,0,0.9);
+}
+
+/* Экрани телефон — desktop simulation */
+#phone-screen{
+  position:absolute;inset:0;z-index:3;
+  background:linear-gradient(160deg,#1a1a2e,#16213e,#0f3460);
+  display:none;
+  flex-direction:column;
+}
+#phone-screen.show{display:flex}
+
+/* Статус бар */
+.status-bar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 16px 4px;font-size:12px;color:rgba(255,255,255,0.8);
+  background:rgba(0,0,0,0.3);
+}
+
+/* Иконкаҳои барнома */
+#app-grid{
+  flex:1;display:grid;grid-template-columns:repeat(4,1fr);
+  gap:0;padding:20px 10px;align-content:start;
+}
+.app-icon{
+  display:flex;flex-direction:column;align-items:center;
+  padding:12px 6px;border-radius:16px;cursor:pointer;
+  transition:background 0.15s,transform 0.15s;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;
+}
+.app-icon.hover{background:rgba(255,255,255,0.15);transform:scale(1.08)}
+.app-icon.clicked{background:rgba(255,255,255,0.3);transform:scale(0.95)}
+.app-emoji{font-size:36px;margin-bottom:6px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.4))}
+.app-name{font-size:11px;color:rgba(255,255,255,0.85);text-align:center;font-weight:500}
+
+/* Dock */
+#dock{
+  display:flex;justify-content:space-around;
+  padding:10px 20px 16px;
+  background:rgba(255,255,255,0.1);
+  backdrop-filter:blur(20px);
+  border-top:1px solid rgba(255,255,255,0.15);
+}
+.dock-icon{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:8px 12px;border-radius:14px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.dock-icon.hover{background:rgba(255,255,255,0.2)}
+.dock-emoji{font-size:30px}
+.dock-name{font-size:10px;color:rgba(255,255,255,0.7)}
+
+/* Бейдж */
+#badge{
+  position:absolute;top:20%;left:50%;transform:translateX(-50%);
+  background:rgba(20,20,60,0.92);
+  border:1.5px solid rgba(120,100,255,0.6);
+  border-radius:30px;padding:10px 28px;
+  font-size:15px;font-weight:700;color:#ddd8ff;
+  white-space:nowrap;opacity:0;transition:opacity 0.2s;z-index:8;
+  pointer-events:none;
+}
+#badge.on{opacity:1}
+
+/* Оғоз экран */
+#ss{
+  position:absolute;inset:0;z-index:10;
+  background:rgba(0,0,10,0.95);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:16px;text-align:center;padding:28px;
+}
+.ss-logo{font-size:32px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px}
+.ss-ver{font-size:13px;color:rgba(120,160,255,0.6);margin-top:-10px}
+.ss-box{
+  background:rgba(15,22,65,0.7);border:1px solid rgba(80,120,255,0.3);
+  border-radius:16px;padding:16px 20px;
+  font-size:13px;color:rgba(160,200,255,0.85);
+  line-height:2;max-width:290px;text-align:left;
+}
+.ss-btn{
+  background:linear-gradient(135deg,rgba(45,75,215,.95),rgba(75,45,205,.95));
+  border:1.5px solid rgba(105,150,255,.5);
+  border-radius:16px;padding:15px 36px;
+  font-size:17px;font-weight:700;color:#dde8ff;
+  cursor:pointer;width:240px;
+  box-shadow:0 4px 22px rgba(55,80,210,.4);
+}
+.ss-hint{font-size:12px;color:rgba(100,130,200,0.6);max-width:280px;line-height:1.6}
+.ss-err{font-size:13px;color:#f08080;max-width:280px}
+
+/* Тугмаҳои поён */
+#bar{
+  display:flex;gap:8px;padding:8px 10px 12px;
+  background:rgba(3,3,14,.97);
+  border-top:1px solid rgba(55,90,210,.22);z-index:6;
+}
+#bar button{
+  flex:1;padding:12px 0;border-radius:13px;
+  border:1px solid rgba(85,130,255,.28);
+  background:rgba(12,18,52,.85);
+  color:#8aaaea;font-size:13px;font-weight:600;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+#bar button:active{background:rgba(35,55,130,.9)}
+#btn-go{border-color:rgba(75,205,120,.4);color:#6ddb9a}
+
+/* Popup барнома */
+#app-popup{
+  position:absolute;inset:0;z-index:7;
+  background:rgba(0,0,20,0.92);
+  display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;
+}
+#app-popup.show{display:flex}
+.popup-icon{font-size:72px}
+.popup-name{font-size:22px;font-weight:700;color:#eef4ff}
+.popup-msg{font-size:14px;color:rgba(160,200,255,0.7)}
+.popup-close{
+  background:rgba(50,70,200,0.85);border:1px solid rgba(100,140,255,0.4);
+  border-radius:14px;padding:12px 32px;
+  font-size:15px;font-weight:600;color:#dde8ff;cursor:pointer;margin-top:8px;
+}
+</style>
+</head>
+<body>
+
+<div id="scene">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="handcv"></canvas>
+  <div id="cursor"></div>
+
+  <!-- Экрани телефон -->
+  <div id="phone-screen">
+    <div class="status-bar">
+      <span id="ps-time">14:39</span>
+      <span>📶 🔋</span>
+    </div>
+
+    <div id="app-grid">
+      <div class="app-icon" data-app="Камера" data-emoji="📷"><div class="app-emoji">📷</div><div class="app-name">Камера</div></div>
+      <div class="app-icon" data-app="Мусиқӣ" data-emoji="🎵"><div class="app-emoji">🎵</div><div class="app-name">Мусиқӣ</div></div>
+      <div class="app-icon" data-app="Видео" data-emoji="▶️"><div class="app-emoji">▶️</div><div class="app-name">Видео</div></div>
+      <div class="app-icon" data-app="Тақвим" data-emoji="📅"><div class="app-emoji">📅</div><div class="app-name">Тақвим</div></div>
+      <div class="app-icon" data-app="Галерея" data-emoji="🖼️"><div class="app-emoji">🖼️</div><div class="app-name">Галерея</div></div>
+      <div class="app-icon" data-app="Facebook" data-emoji="👤"><div class="app-emoji">👤</div><div class="app-name">Facebook</div></div>
+      <div class="app-icon" data-app="Танзимот" data-emoji="⚙️"><div class="app-emoji">⚙️</div><div class="app-name">Танзимот</div></div>
+      <div class="app-icon" data-app="Браузер" data-emoji="🌐"><div class="app-emoji">🌐</div><div class="app-name">Браузер</div></div>
+      <div class="app-icon" data-app="WhatsApp" data-emoji="💬"><div class="app-emoji">💬</div><div class="app-name">WhatsApp</div></div>
+      <div class="app-icon" data-app="TikTok" data-emoji="🎶"><div class="app-emoji">🎶</div><div class="app-name">TikTok</div></div>
+      <div class="app-icon" data-app="Яндекс" data-emoji="🔍"><div class="app-emoji">🔍</div><div class="app-name">Яндекс</div></div>
+      <div class="app-icon" data-app="Телефон" data-emoji="📞"><div class="app-emoji">📞</div><div class="app-name">Телефон</div></div>
+    </div>
+
+    <div id="dock">
+      <div class="dock-icon" data-app="Зангҳо" data-emoji="📞"><div class="dock-emoji">📞</div><div class="dock-name">Зангҳо</div></div>
+      <div class="dock-icon" data-app="Контактҳо" data-emoji="👥"><div class="dock-emoji">👥</div><div class="dock-name">Контактҳо</div></div>
+      <div class="dock-icon" data-app="Паёмҳо" data-emoji="💬"><div class="dock-emoji">💬</div><div class="dock-name">Паёмҳо</div></div>
+      <div class="dock-icon" data-app="Браузер" data-emoji="🌐"><div class="dock-emoji">🌐</div><div class="dock-name">Браузер</div></div>
+    </div>
+  </div>
+
+  <!-- Popup -->
+  <div id="app-popup">
+    <div class="popup-icon" id="popup-icon">📷</div>
+    <div class="popup-name" id="popup-name">Камера</div>
+    <div class="popup-msg">кушода шуд</div>
+    <button class="popup-close" onclick="closePopup()">✕ Бастан</button>
+  </div>
+
+  <div id="badge"></div>
+
+  <!-- Старт -->
+  <div id="ss">
+    <div class="ss-logo">SLS-Glass</div>
+    <div class="ss-ver">V0.3 — Remote Control</div>
+    <div class="ss-box">
+      🖐️ <b>Дастро нишон диҳед</b> — курсор пайдо мешавад<br>
+      ✦ <b>Pinch</b> — барномаро кушоед<br>
+      ↕️ <b>Дастро ҳаракат диҳед</b> — курсор меравад<br>
+      📱 <b>Телефонро рӯи миз монед</b>
+    </div>
+    <button class="ss-btn" onclick="startCam()">📷 Камера кушо</button>
+    <p class="ss-hint">Камераи пушти телефон кор мекунад</p>
+  </div>
+</div>
+
+<div id="bar">
+  <button id="btn-go" onclick="startCam()">▶ Оғоз</button>
+  <button onclick="stopCam()">⏹ Банд</button>
+  <button onclick="switchCam()">🔄 Рӯй/Пушт</button>
+</div>
+
+<script>
+const vid = document.getElementById('vid');
+const hcv = document.getElementById('handcv');
+const hx = hcv.getContext('2d');
+const ss = document.getElementById('ss');
+const badge = document.getElementById('badge');
+const cursor = document.getElementById('cursor');
+const phoneScreen = document.getElementById('phone-screen');
+
+let stream=null, hands=null, mpCam=null;
+let facing='environment';
+let lastG='', bTO=null, lastFT=performance.now();
+let curX=0, curY=0, smoothX=0, smoothY=0;
+let pinchCooldown=false;
+let hoveredEl=null;
+
+function resize(){
+  hcv.width=hcv.offsetWidth;
+  hcv.height=hcv.offsetHeight;
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,100);
+
+// Соат
+function tick(){
+  const n=new Date();
+  const t=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('ps-time').textContent=t;
+}
+tick(); setInterval(tick,1000);
+
+// Бейдж
+function showBadge(t){
+  badge.textContent=t;badge.classList.add('on');
+  clearTimeout(bTO);bTO=setTimeout(()=>badge.classList.remove('on'),2000);
+}
+
+// Popup барнома
+function openApp(name,emoji){
+  document.getElementById('popup-icon').textContent=emoji;
+  document.getElementById('popup-name').textContent=name;
+  document.getElementById('app-popup').classList.add('show');
+  showBadge(emoji+' '+name+' кушода шуд!');
+}
+function closePopup(){
+  document.getElementById('app-popup').classList.remove('show');
+}
+
+// Курсорро иконка рӯи зер кардан
+function hitTest(x,y){
+  const els=document.querySelectorAll('.app-icon,.dock-icon');
+  for(const el of els){
+    const r=el.getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) return el;
+  }
+  return null;
+}
+
+// Тасниф
+function classify(lm){
+  const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  if(d(lm[4],lm[8])<0.07) return 'pinch';
+  const up=[lm[8].y<lm[6].y,lm[12].y<lm[10].y,lm[16].y<lm[14].y,lm[20].y<lm[18].y];
+  const n=up.filter(Boolean).length;
+  if(n===0) return 'fist';
+  return 'hand';
+}
+
+// Кашидани скелет
+function drawHand(lm){
+  const W=hcv.width,H=hcv.height;
+  hx.clearRect(0,0,W,H);
+  const p=l=>[l.x*W,l.y*H];
+  const CONN=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+
+  hx.lineWidth=2.5;
+  hx.strokeStyle='rgba(100,180,255,0.75)';
+  hx.shadowColor='rgba(60,140,255,0.7)';
+  hx.shadowBlur=8;
+  for(const[a,b]of CONN){
+    const[x1,y1]=p(lm[a]),[x2,y2]=p(lm[b]);
+    hx.beginPath();hx.moveTo(x1,y1);hx.lineTo(x2,y2);hx.stroke();
+  }
+  hx.shadowBlur=0;
+
+  for(let i=0;i<21;i++){
+    const[x,y]=p(lm[i]);
+    const key=i===4||i===8;
+    const tip=[4,8,12,16,20].includes(i);
+    hx.beginPath();
+    hx.arc(x,y,key?10:tip?7:4,0,Math.PI*2);
+    hx.fillStyle=key?'rgba(255,220,50,.98)':tip?'rgba(160,225,255,.92)':'rgba(100,175,255,.85)';
+    hx.shadowColor=key?'rgba(255,200,0,.9)':'rgba(80,160,255,.6)';
+    hx.shadowBlur=key?14:6;
+    hx.fill();
+    hx.shadowBlur=0;
+  }
+}
+
+// Натиҷаи MediaPipe
+function onResults(res){
+  const now=performance.now();
+  lastFT=now;
+
+  if(!res.multiHandLandmarks?.length){
+    hx.clearRect(0,0,hcv.width,hcv.height);
+    cursor.style.display='none';
+    if(hoveredEl){hoveredEl.classList.remove('hover');hoveredEl=null;}
+    lastG='';
+    return;
+  }
+
+  const lm=res.multiHandLandmarks[0];
+  drawHand(lm);
+
+  const W=hcv.width, H=hcv.height;
+  const sr=document.getElementById('scene').getBoundingClientRect();
+
+  // Курсор = нӯги ангушти ишора (landmark 8)
+  const ix=lm[8].x*sr.width;
+  const iy=lm[8].y*sr.height;
+
+  // Силлиқ ҳаракат
+  smoothX+=(ix-smoothX)*0.35;
+  smoothY+=(iy-smoothY)*0.35;
+
+  cursor.style.display='block';
+  cursor.style.left=smoothX+'px';
+  cursor.style.top=smoothY+'px';
+
+  const g=classify(lm);
+
+  // Hover
+  const el=hitTest(smoothX+sr.left,smoothY+sr.top);
+  if(el!==hoveredEl){
+    if(hoveredEl) hoveredEl.classList.remove('hover');
+    hoveredEl=el;
+    if(el) el.classList.add('hover');
+  }
+
+  // Pinch = клик
+  if(g==='pinch'){
+    cursor.classList.add('pinch');
+    if(!pinchCooldown && hoveredEl){
+      pinchCooldown=true;
+      hoveredEl.classList.add('clicked');
+      const name=hoveredEl.dataset.app;
+      const emoji=hoveredEl.dataset.emoji;
+      if(name) openApp(name,emoji);
+      setTimeout(()=>{
+        if(hoveredEl) hoveredEl.classList.remove('clicked');
+        pinchCooldown=false;
+      },800);
+    }
+    if(!pinchCooldown && lastG!=='pinch') showBadge('✦ Pinch!');
+  } else {
+    cursor.classList.remove('pinch');
+    pinchCooldown=false;
+  }
+
+  lastG=g;
+}
+
+function initMP(){
+  phoneScreen.classList.add('show');
+  hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.72,minTrackingConfidence:.6});
+  hands.onResults(onResults);
+  if(window.Camera){
+    mpCam=new Camera(vid,{onFrame:async()=>{await hands.send({image:vid})},width:640,height:480});
+    mpCam.start();
+  }
+}
+
+function loadMP(){
+  if(window.Hands){initMP();return;}
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+  s1.onload=()=>{
+    const s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+    s2.onload=initMP;
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
+}
+
+async function startCam(){
+  const e=ss.querySelector('.ss-err');if(e)e.remove();
+  try{
+    if(stream)stream.getTracks().forEach(t=>t.stop());
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},
+      audio:false
+    });
+    vid.srcObject=stream;
+    await vid.play();
+    resize();
+    ss.style.display='none';
+    loadMP();
+  }catch(err){
+    const p=document.createElement('p');p.className='ss-err';
+    p.textContent='Хато: '+err.message;
+    ss.appendChild(p);
+  }
+}
+
+function stopCam(){
+  if(mpCam){try{mpCam.stop()}catch(e){}mpCam=null;}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  hx.clearRect(0,0,hcv.width,hcv.height);
+  cursor.style.display='none';
+  phoneScreen.classList.remove('show');
+  ss.style.display='flex';
+  lastG='';
+}
+
+async function switchCam(){
+  facing=facing==='environment'?'user':'environment';
+  if(stream) await startCam();
+}
+</script>
+</body>
+</html>
