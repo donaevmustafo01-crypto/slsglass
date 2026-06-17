@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="tg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SLS-Glass Debug</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#0f0;font-family:monospace;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+#scene{position:relative;flex:1;background:#111;overflow:hidden}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2}
+#log{
+  background:#000;color:#0f0;font-size:11px;line-height:1.5;
+  padding:8px;height:160px;overflow-y:auto;border-top:2px solid #0f0;
+  white-space:pre-wrap;word-break:break-all;
+}
+#bar{display:flex;gap:6px;padding:8px;background:#000}
+#bar button{flex:1;padding:14px 0;font-size:14px;font-weight:bold;background:#222;color:#0f0;border:1px solid #0f0;border-radius:6px}
+#bar button:active{background:#0f0;color:#000}
+#status{position:absolute;top:8px;left:8px;z-index:5;background:rgba(0,0,0,0.8);color:#0f0;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:bold}
+</style>
+</head>
+<body>
+<div id="scene">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="cv"></canvas>
+  <div id="status">Омода</div>
+</div>
+<div id="bar">
+  <button onclick="startBack()">📷 Пушт</button>
+  <button onclick="startFront()">🤳 Рӯй</button>
+  <button onclick="stopAll()">⏹ Банд</button>
+</div>
+<div id="log"></div>
+
+<script>
+const vid=document.getElementById('vid');
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+const logEl=document.getElementById('log');
+const statusEl=document.getElementById('status');
+let stream=null,hands=null,mpCam=null,frameCount=0;
+
+function log(msg){
+  const t=new Date().toLocaleTimeString();
+  logEl.textContent += `[${t}] ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+  console.log(msg);
+}
+
+function setStatus(s){ statusEl.textContent = s; }
+
+function resize(){ cv.width=cv.offsetWidth; cv.height=cv.offsetHeight; }
+window.addEventListener('resize',resize);
+setTimeout(resize,100);
+
+log('Саҳифа бор шуд. Браузер: ' + navigator.userAgent.slice(0,60));
+log('HTTPS: ' + (location.protocol === 'https:' ? 'ҲА' : 'НЕ — мушкил!'));
+log('getUserMedia дастрас: ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'ҲА' : 'НЕ'));
+
+async function listCameras(){
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d=>d.kind==='videoinput');
+    log('Камераҳои ёфтшуда: ' + cams.length);
+    cams.forEach((c,i)=>log(`  ${i}: ${c.label||'(ном пинҳон, иҷозат лозим)'}`));
+  }catch(e){
+    log('Хато дар рӯйхати камера: ' + e.message);
+  }
+}
+listCameras();
+
+async function startCamera(facing){
+  log('Кӯшиши кушодани камера: ' + facing);
+  setStatus('Камера кушода мешавад...');
+  try{
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); log('Камераи пешина банд шуд'); }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode: facing },
+      audio:false
+    });
+    log('✅ Камера кушода шуд!');
+    const track = stream.getVideoTracks()[0];
+    log('Track: ' + track.label);
+    log('Settings: ' + JSON.stringify(track.getSettings()));
+    vid.srcObject = stream;
+    await vid.play();
+    log('✅ Video play шуд. W=' + vid.videoWidth + ' H=' + vid.videoHeight);
+    setStatus('Камера фаъол: ' + facing);
+    resize();
+    await listCameras();
+    loadMediaPipe();
+  }catch(e){
+    log('❌ ХАТО: ' + e.name + ' — ' + e.message);
+    setStatus('ХАТО: ' + e.name);
+  }
+}
+
+function startBack(){ startCamera({ exact:'environment' }).catch(()=>startCamera('environment')); }
+function startFront(){ startCamera('user'); }
+
+function stopAll(){
+  if(mpCam){ try{mpCam.stop()}catch(e){} mpCam=null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  ctx.clearRect(0,0,cv.width,cv.height);
+  setStatus('Банд шуд');
+  log('Ҳама банд шуд');
+}
+
+function loadMediaPipe(){
+  log('MediaPipe Hands бор мешавад...');
+  if(window.Hands){ initHands(); return; }
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+  s1.onload=()=>{
+    log('✅ hands.js бор шуд');
+    const s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+    s2.onload=()=>{ log('✅ camera_utils.js бор шуд'); initHands(); };
+    s2.onerror=()=>log('❌ camera_utils.js НАШУД БОР');
+    document.head.appendChild(s2);
+  };
+  s1.onerror=()=>log('❌ hands.js НАШУД БОР — интернет ё CDN мушкил дорад');
+  document.head.appendChild(s1);
+}
+
+function initHands(){
+  log('Hands модел сохта мешавад...');
+  hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:0.6,minTrackingConfidence:0.5});
+  hands.onResults(onResults);
+  log('✅ Hands модел тайёр. Camera frame loop оғоз мешавад...');
+
+  if(window.Camera){
+    mpCam=new Camera(vid,{
+      onFrame: async ()=>{
+        frameCount++;
+        if(frameCount % 30 === 0) log('Frame #' + frameCount + ' фиристода шуд');
+        await hands.send({image:vid});
+      },
+      width:640,height:480
+    });
+    mpCam.start();
+    log('✅ Camera loop оғоз шуд');
+  } else {
+    log('❌ window.Camera мавҷуд нест!');
+  }
+}
+
+let resultCount=0;
+function onResults(res){
+  resultCount++;
+  if(resultCount % 15 === 0){
+    log('onResults фарохонда шуд #' + resultCount + ' — дастҳо: ' + (res.multiHandLandmarks?.length||0));
+  }
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  if(!res.multiHandLandmarks || res.multiHandLandmarks.length===0){
+    setStatus('Даст ёфт нашуд (камера фаъол)');
+    return;
+  }
+  setStatus('✅ ДАСТ ЁФТ ШУД!');
+  const lm=res.multiHandLandmarks[0];
+  const CONN=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+  ctx.strokeStyle='lime';ctx.lineWidth=3;
+  for(const[a,b]of CONN){
+    ctx.beginPath();
+    ctx.moveTo(lm[a].x*W,lm[a].y*H);
+    ctx.lineTo(lm[b].x*W,lm[b].y*H);
+    ctx.stroke();
+  }
+  for(const p of lm){
+    ctx.beginPath();
+    ctx.arc(p.x*W,p.y*H,6,0,Math.PI*2);
+    ctx.fillStyle='yellow';
+    ctx.fill();
+  }
+}
+</script>
+</body>
+</html>
